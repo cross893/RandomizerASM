@@ -2,20 +2,18 @@
 default rel
 
 extern printf
-extern scanf
 extern srand
 extern rand
-extern time
+extern atoi
+extern GetTickCount
 
 section .data
-    prompt1: db 'Введите первое число: ', 0
-    prompt2: db 'Введите второе число: ', 0
-    result: db 'Случайное число: %d', 10, 0
-    format: db '%d', 0
+    result db 'Случайное число: %d', 10, 0
+    usage db 'Использование: program.exe <min> <max>', 10, 0
     
 section .bss
-    a: resd 1
-    b: resd 1
+    num1 resd 1
+    num2 resd 1
     
 section .text
 global main
@@ -25,55 +23,82 @@ main:
     mov rbp, rsp
     sub rsp, 32
     
-    ; time(NULL)
-    xor ecx, ecx
-    call time
+    ; Проверяем количество аргументов
+    cmp rcx, 3
+    jne .show_usage
     
-    ; srand(time(NULL))
-    mov rcx, rax
-    call srand
+    ; Получаем аргументы
+    mov r12, rdx
     
-    ; printf(prompt1)
-    lea rcx, [prompt1]
-    call printf
+    ; Первый аргумент
+    mov rcx, [r12 + 8]
+    call atoi
+    mov [num1], eax
     
-    ; scanf("%d", &a)
-    lea rdx, [a]
-    lea rcx, [format]
-    call scanf
+    ; Второй аргумент
+    mov rcx, [r12 + 16]
+    call atoi
+    mov [num2], eax
     
-    ; printf(prompt2)
-    lea rcx, [prompt2]
-    call printf
+    ; Упорядочиваем числа
+    mov eax, [num1]
+    mov ebx, [num2]
+    cmp eax, ebx
+    jle .no_swap
+    xchg eax, ebx
+.no_swap:
+    mov [num1], eax
+    mov [num2], ebx
     
-    ; scanf("%d", &b)
-    lea rdx, [b]
-    lea rcx, [format]
-    call scanf
+    ; Улучшенная инициализация генератора случайных чисел
+    call better_seed
     
-    ; rand()
+    ; Генерация случайного числа
     call rand
     
-    ; Вычисление диапазона
-    mov ebx, [b]
-    sub ebx, [a]
+    ; Вычисление в диапазоне
+    mov ebx, [num2]
+    sub ebx, [num1]
     inc ebx
     
-    ; Деление
     xor edx, edx
     div ebx
+    add edx, [num1]
     
-    ; Результат
-    add edx, [a]
-    
-    ; printf
+    ; Вывод результата
     mov r8d, edx
     mov edx, r8d
     lea rcx, [result]
     call printf
     
-    ; Завершение
+    jmp .exit
+
+.show_usage:
+    ; Простая подсказка в одну строку
+    lea rcx, [usage]
+    call printf
+
+.exit:
     add rsp, 32
     pop rbp
     xor eax, eax
+    ret
+
+better_seed:
+    push rbp
+    mov rbp, rsp
+    
+    ; Получаем более точное время через GetTickCount
+    call GetTickCount
+    
+    ; Добавляем entropy через счетчик тактов процессора
+    rdtsc                   ; читаем Time Stamp Counter
+    xor eax, edx            ; смешиваем младшие и старшие биты
+    add eax, [rsp]          ; добавляем значение указателя стека
+    
+    ; Инициализируем генератор
+    mov rcx, rax
+    call srand
+    
+    pop rbp
     ret
